@@ -40,7 +40,7 @@ export default function Drawer({ isOpen, scenario, liveEvents, isProcessing, tim
                 <div className="dw-top">
                     <div className="dw-close" onClick={onClose}>✕</div>
                     <div className="dw-info">
-                        <div className="dw-name">{scenario?.customer_name || '—'}</div>
+                        <div className="dw-name">{scenario?.user.first_name} {scenario?.user.last_name}</div>
                         <div className="dw-meta">
                             {scenario && (
                                 <>
@@ -51,7 +51,7 @@ export default function Drawer({ isOpen, scenario, liveEvents, isProcessing, tim
                                         {scenario.claim_id}
                                     </span>
                                     <span className="dw-chip" style={{ color: 'var(--sub)', borderColor: 'var(--border)' }}>
-                                        {scenario.claim_type} · €{fmt(scenario.amount_eur || 0)}
+                                        {scenario.claim.treatment_type} · €{fmt(scenario.claim.claim_amount || 0)}
                                     </span>
                                     {isProcessing
                                         ? <span className="dw-chip" style={{ color: 'var(--laya)', borderColor: 'var(--laya)' }}>⚙ Processing</span>

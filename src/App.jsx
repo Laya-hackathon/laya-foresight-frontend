@@ -8,8 +8,34 @@ import BarChart from './components/BarChart';
 import FeedCard from './components/FeedCard';
 import CallCard from './components/CallCard';
 import Drawer from './components/Drawer';
-import { FEED_DATA } from './data/feedData';
 import { BACKEND_URL } from './utils/helpers';
+
+const TYPE_META = {
+  email:        { icon: '📧', bg: '#eff6ff', badge: 'EMAIL', bc: '#eff6ff', btc: '#1d4ed8' },
+  alert:        { icon: '🔔', bg: '#fef3c7', badge: 'SLACK', bc: '#fef3c7', btc: '#b45309' },
+  notification: { icon: '📱', bg: '#f0fdf4', badge: 'PUSH',  bc: '#f0fdf4', btc: '#15803d' },
+  callback:     { icon: '📞', bg: '#f5f3ff', badge: 'CALL',  bc: '#f5f3ff', btc: '#6d28d9' },
+  intervention: { icon: '✅', bg: '#f0fdf4', badge: 'DONE',  bc: '#f0fdf4', btc: '#15803d' },
+  prediction:   { icon: '🧠', bg: '#e8f0fb', badge: 'MODEL', bc: '#e8f0fb', btc: '#003d7a' },
+};
+
+function relTime(ts) {
+  if (!ts) return '';
+  const diff = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function dbRowToFeed(row) {
+  const meta = TYPE_META[row.type] || TYPE_META.prediction;
+  return {
+    ...meta,
+    text: `<strong>${row.type.charAt(0).toUpperCase() + row.type.slice(1)}</strong> — ${row.text}`,
+    time: relTime(row.created_at),
+  };
+}
 
 function Toast({ title, body }) {
   return (
@@ -22,35 +48,100 @@ function Toast({ title, body }) {
 
 export default function App() {
   const [scenarios, setScenarios] = useState([]);
-  const [cardStates, setCardStates] = useState({});
+  const [cardStates, setCardStates] = useState(() => {
+    try {
+      const saved = localStorage.getItem('laya_card_states');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [timerSec, setTimerSec] = useState(0);
   const [toast, setToast] = useState(null);
+  const [feedItems, setFeedItems] = useState([]);
+  const [agentStats, setAgentStats] = useState(null);
   const timerRef = useRef(null);
   const sseRef = useRef({});
 
-  // Load scenarios
-  useEffect(() => {
+  // Load scenarios (poll every 5s for new ML predictions)
+  const loadScenarios = useCallback(() => {
     fetch(`${BACKEND_URL}/api/scenarios`)
       .then(r => r.json())
       .then(data => {
         const list = data.scenarios || [];
         setScenarios(list);
+        const activeIds = new Set(list.map(s => s.id));
+
+        // Remove card states for scenarios no longer on server (e.g. after reset)
+        setCardStates(prev => {
+          const cleaned = {};
+          Object.entries(prev).forEach(([id, cs]) => {
+            if (activeIds.has(id)) cleaned[id] = cs;
+          });
+          return cleaned;
+        });
+
         list.forEach((s, i) => {
-          setTimeout(() => {
-            setCardStates(prev => ({
+          setCardStates(prev => {
+            if (prev[s.id]) return prev;
+            return {
               ...prev,
               [s.id]: { state: 'incoming', events: [], startedAt: null, finishedAt: null, isNew: true },
-            }));
-            setTimeout(() => {
-              setCardStates(prev => ({ ...prev, [s.id]: { ...prev[s.id], isNew: false } }));
-            }, 800);
-          }, i * 500);
+            };
+          });
+          setTimeout(() => {
+            setCardStates(prev => {
+              if (!prev[s.id]) return prev;
+              return { ...prev, [s.id]: { ...prev[s.id], isNew: false } };
+            });
+          }, 800 + i * 500);
         });
       })
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    loadScenarios();
+    const id = setInterval(loadScenarios, 5000);
+    return () => clearInterval(id);
+  }, [loadScenarios]);
+
+  // Load feed (poll every 15s)
+  useEffect(() => {
+    const load = () => {
+      fetch(`${BACKEND_URL}/api/feed`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.feed) setFeedItems(data.feed.map(dbRowToFeed));
+        })
+        .catch(() => { });
+    };
+    load();
+    const id = setInterval(load, 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Load stats for AgentBar (poll every 15s)
+  useEffect(() => {
+    const load = () => {
+      fetch(`${BACKEND_URL}/api/stats`)
+        .then(r => r.json())
+        .then(setAgentStats)
+        .catch(() => { });
+    };
+    load();
+    const id = setInterval(load, 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Persist card states (without events array to keep storage small)
+  useEffect(() => {
+    const toSave = {};
+    Object.entries(cardStates).forEach(([id, cs]) => {
+      toSave[id] = { state: cs.state, startedAt: cs.startedAt, finishedAt: cs.finishedAt, isNew: false };
+    });
+    localStorage.setItem('laya_card_states', JSON.stringify(toSave));
+  }, [cardStates]);
 
   const showToast = useCallback((title, body) => {
     setToast({ title, body });
@@ -107,7 +198,21 @@ export default function App() {
     setDrawerOpen(true);
     setTimerSec(0);
     const cs = cardStates[scenarioId];
-    if (!cs || cs.state === 'incoming') runScenario(scenarioId);
+    if (!cs || cs.state === 'incoming') {
+      runScenario(scenarioId);
+    } else if (cs.state === 'done' && (!cs.events || cs.events.length === 0)) {
+      fetch(`${BACKEND_URL}/api/history/${scenarioId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.events?.length > 0) {
+            setCardStates(prev => ({
+              ...prev,
+              [scenarioId]: { ...prev[scenarioId], events: data.events },
+            }));
+          }
+        })
+        .catch(() => { });
+    }
   }, [cardStates, runScenario]);
 
   const closeDrawer = useCallback(() => {
@@ -132,10 +237,17 @@ export default function App() {
 
   const cardList = Object.values(cardStates);
   const activeCount = cardList.filter(c => c.state === 'proc').length;
-  const doneCount = cardList.filter(c => c.state === 'done').length;
   const activeCardCS = activeId ? cardStates[activeId] : null;
   const activeScenario = scenarios.find(s => s.id === activeId);
   const visibleScenarios = scenarios.filter(s => cardStates[s.id]);
+
+  const todayCount = agentStats?.total_predictions ?? scenarios.length;
+  const preventedCount = agentStats?.calls_prevented ?? 0;
+  const successRate = agentStats && agentStats.total_predictions > 0
+    ? Math.round((agentStats.calls_prevented / agentStats.total_predictions) * 100)
+    : 0;
+
+  const displayFeed = feedItems.length > 0 ? feedItems : [];
 
   return (
     <>
@@ -143,7 +255,6 @@ export default function App() {
       <div className="page-body">
         {/* ── Left sidebar ─────────────────────────── */}
         <aside className="left-sidebar">
-          {/* Trigger cards */}
           <div className="sidebar-section">
             <div className="incoming-hdr">
               <div className="in-pulse" />
@@ -180,9 +291,9 @@ export default function App() {
         <main className="main-content">
           <AgentBar
             activeCount={activeCount}
-            todayCount={scenarios.length + 36}
-            preventedCount={doneCount + 15}
-            successRate={72}
+            todayCount={todayCount}
+            preventedCount={preventedCount}
+            successRate={successRate}
           />
           <StatRow />
 
@@ -193,7 +304,10 @@ export default function App() {
                 <div className="card-title">⚡ Recent Activity</div>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--laya)', cursor: 'pointer' }}>View all →</span>
               </div>
-              {FEED_DATA.map((f, i) => <FeedCard key={i} item={f} />)}
+              {displayFeed.length === 0
+                ? <div style={{ color: 'var(--faint)', fontSize: 12, padding: '1rem 0' }}>No activity yet today</div>
+                : displayFeed.map((f, i) => <FeedCard key={i} item={f} />)
+              }
             </div>
           </div>
         </main>
