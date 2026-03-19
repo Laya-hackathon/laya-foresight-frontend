@@ -1,59 +1,40 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { renderInline, renderMd } from '../utils/renderMd';
 
-// ── Typewriter hook: animates text character by character ──────────────────
-function useTypewriter(text, speed = 12) {
-    const [displayed, setDisplayed] = useState('');
-    const [done, setDone] = useState(false);
-    const frameRef = useRef(null);
-    const indexRef = useRef(0);
-
-    useEffect(() => {
-        setDisplayed('');
-        setDone(false);
-        indexRef.current = 0;
-
-        const tick = () => {
-            indexRef.current += 1;
-            setDisplayed(text.slice(0, indexRef.current));
-            if (indexRef.current < text.length) {
-                // Accelerate on spaces/punctuation
-                const ch = text[indexRef.current];
-                const delay = /[\s.,!?;:]/.test(ch) ? speed * 0.3 : speed;
-                frameRef.current = setTimeout(tick, delay);
-            } else {
-                setDone(true);
-            }
-        };
-
-        frameRef.current = setTimeout(tick, speed);
-        return () => clearTimeout(frameRef.current);
-    }, [text, speed]);
-
-    return { displayed, done };
-}
-
-// ── Animated reasoning text paragraph ─────────────────────────────────────
-function TypewriterParagraph({ text, delay = 0 }) {
-    const [active, setActive] = useState(false);
-
-    useEffect(() => {
-        const t = setTimeout(() => setActive(true), delay);
-        return () => clearTimeout(t);
-    }, [delay]);
-
-    const { displayed, done } = useTypewriter(active ? text : '', 10);
+// ── Word-by-word token fade (like AI token streaming) ──────────────────────
+// Splits text into words, each word fades in with a staggered delay.
+// Markdown is applied per-word so **bold** renders correctly.
+function WordStream({ text, startDelay = 0 }) {
+    // Tokenise: split on spaces but keep the space attached to the preceding word
+    // so spacing is preserved naturally.
+    const tokens = text.split(/(?<=\s)|(?=\s)/).filter(Boolean);
 
     return (
-        <p style={{ marginBottom: '.3rem', position: 'relative' }}>
-            {displayed}
-            {!done && active && (
-                <span className="typcursor">▋</span>
-            )}
+        <>
+            {tokens.map((tok, i) => (
+                <span
+                    key={i}
+                    className="word-token"
+                    style={{ animationDelay: `${startDelay + i * 22}ms` }}
+                >
+                    {tok}
+                </span>
+            ))}
+        </>
+    );
+}
+
+// ── Rendered reasoning line with word-stream animation ─────────────────────
+function StreamLine({ text, lineDelay = 0 }) {
+    // Count approximate words already shown before this line to continue stagger
+    return (
+        <p style={{ marginBottom: '.3rem', lineHeight: 1.8 }}>
+            <WordStream text={text} startDelay={lineDelay} />
         </p>
     );
 }
 
-// ── Slide-in wrapper for any block ─────────────────────────────────────────
+// ── Slide-in wrapper ────────────────────────────────────────────────────────
 function SlideIn({ children, delay = 0 }) {
     const [visible, setVisible] = useState(false);
     useEffect(() => {
@@ -68,32 +49,55 @@ function SlideIn({ children, delay = 0 }) {
     );
 }
 
-// ── Reasoning block with typewriter ───────────────────────────────────────
+// ── Fade-in wrapper (for tool blocks) ──────────────────────────────────────
+function FadeIn({ children, delay = 0 }) {
+    const [visible, setVisible] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => setVisible(true), delay);
+        return () => clearTimeout(t);
+    }, [delay]);
+
+    return (
+        <div style={{
+            opacity: visible ? 1 : 0,
+            transform: visible ? 'translateY(0)' : 'translateY(6px)',
+            transition: 'opacity .3s ease, transform .3s ease',
+        }}>
+            {children}
+        </div>
+    );
+}
+
+// ── Reasoning block ─────────────────────────────────────────────────────────
 function ReasoningBlock({ event, index }) {
     const [open, setOpen] = useState(true);
     const text = event.data?.text || event.data?.content || '';
     const lines = text.split('\n').filter(l => l.trim());
 
+    // Accumulate word counts per line so stagger is continuous across lines
+    let wordOffset = 0;
+
     return (
         <SlideIn>
             <div className="reasoning-block">
                 <div className="reasoning-hdr" onClick={() => setOpen(o => !o)} style={{ cursor: 'pointer' }}>
-                    <span style={{ fontSize: 13 }}>💭</span>
+                    <span style={{ fontSize: 12 }}>💭</span>
                     <span className="think-lbl" style={{ flex: 1 }}>Reasoning</span>
                     <span className="reasoning-step">Step {event.data?.step ?? index + 1}</span>
-                    <span className="think-tog" style={{ marginLeft: 8, color: 'rgba(255,215,64,0.6)' }}>
+                    <span className="think-tog" style={{ marginLeft: 8 }}>
                         {open ? '▼' : '▶'}
                     </span>
                 </div>
                 {open && (
                     <div className="reasoning-body">
-                        {lines.map((line, i) => (
-                            <TypewriterParagraph
-                                key={i}
-                                text={line}
-                                delay={i * 60}
-                            />
-                        ))}
+                        {lines.map((line, i) => {
+                            const lineDelay = wordOffset * 22;
+                            const wordCount = line.split(/\s+/).length;
+                            wordOffset += wordCount;
+                            return (
+                                <StreamLine key={i} text={line} lineDelay={lineDelay} />
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -101,11 +105,10 @@ function ReasoningBlock({ event, index }) {
     );
 }
 
-// ── Tool call block with animated args reveal ──────────────────────────────
+// ── Tool call block ─────────────────────────────────────────────────────────
 function ToolCallBlock({ event }) {
     const input = event.data?.tool_input;
     const argsText = JSON.stringify(input, null, 2);
-    const { displayed: displayedArgs } = useTypewriter(argsText, 6);
 
     return (
         <SlideIn>
@@ -114,20 +117,18 @@ function ToolCallBlock({ event }) {
                     <div className="tool-fn">🔧 <span>{event.data?.tool_name}()</span></div>
                     <span className="tool-chip tool-chip-call">calling…</span>
                 </div>
-                <div className="tool-args">
-                    {displayedArgs}
-                    <span className="typcursor">▋</span>
-                </div>
+                <FadeIn delay={80}>
+                    <div className="tool-args">{argsText}</div>
+                </FadeIn>
             </div>
         </SlideIn>
     );
 }
 
-// ── Tool result block with counter-scan animation ─────────────────────────
+// ── Tool result block ───────────────────────────────────────────────────────
 function ToolResultBlock({ event }) {
     const result = event.data?.result;
     const resultText = JSON.stringify(result, null, 2);
-    const { displayed, done } = useTypewriter(resultText, 4);
 
     return (
         <SlideIn>
@@ -136,17 +137,18 @@ function ToolResultBlock({ event }) {
                     <div className="tool-fn">🔧 <span>{event.data?.tool_name}()</span></div>
                     <span className="tool-chip tool-chip-done">✓ done</span>
                 </div>
-                <div className="tool-result">
-                    <div className="tr-lbl">Result</div>
-                    {displayed}
-                    {!done && <span className="typcursor typcursor-green">▋</span>}
-                </div>
+                <FadeIn delay={60}>
+                    <div className="tool-result">
+                        <div className="tr-lbl">Result</div>
+                        {resultText}
+                    </div>
+                </FadeIn>
             </div>
         </SlideIn>
     );
 }
 
-// ── Status block ──────────────────────────────────────────────────────────
+// ── Status block ────────────────────────────────────────────────────────────
 function StatusBlock({ event }) {
     return (
         <SlideIn>
@@ -158,18 +160,18 @@ function StatusBlock({ event }) {
     );
 }
 
-// ── Done block ────────────────────────────────────────────────────────────
+// ── Done block ──────────────────────────────────────────────────────────────
 function DoneBlock({ event }) {
     return (
         <SlideIn>
-            <div className="live-done done-glow">
+            <div className="live-done">
                 ✅ {event.data?.message || 'Agent task complete'}
             </div>
         </SlideIn>
     );
 }
 
-// ── Error block ───────────────────────────────────────────────────────────
+// ── Error block ─────────────────────────────────────────────────────────────
 function ErrorBlock({ event }) {
     return (
         <SlideIn>
@@ -180,25 +182,24 @@ function ErrorBlock({ event }) {
     );
 }
 
-// ── Event dispatcher ──────────────────────────────────────────────────────
+// ── Event dispatcher ────────────────────────────────────────────────────────
 function LiveEvent({ event, index }) {
     switch (event.type) {
-        case 'reasoning': return <ReasoningBlock event={event} index={index} />;
-        case 'tool_call': return <ToolCallBlock event={event} />;
+        case 'reasoning':   return <ReasoningBlock event={event} index={index} />;
+        case 'tool_call':   return <ToolCallBlock event={event} />;
         case 'tool_result': return <ToolResultBlock event={event} />;
-        case 'status': return <StatusBlock event={event} />;
-        case 'api_call': return <StatusBlock event={event} />;
-        case 'complete': return <DoneBlock event={event} />;
-        case 'error': return <ErrorBlock event={event} />;
-        default: return null;
+        case 'status':
+        case 'api_call':    return <StatusBlock event={event} />;
+        case 'complete':    return <DoneBlock event={event} />;
+        case 'error':       return <ErrorBlock event={event} />;
+        default:            return null;
     }
 }
 
-// ── Main ReasoningTab ─────────────────────────────────────────────────────
+// ── Main ReasoningTab ───────────────────────────────────────────────────────
 export default function ReasoningTab({ liveEvents, isProcessing }) {
     const bottomRef = useRef(null);
 
-    // Auto-scroll when new events arrive
     useEffect(() => {
         if (bottomRef.current) {
             bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -211,7 +212,7 @@ export default function ReasoningTab({ liveEvents, isProcessing }) {
                 <div className="trace-wrap">
                     <div className="proc-ph">
                         <div className="proc-spinner" />
-                        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '.4rem' }}>
+                        <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: 1 }}>
                             Agent initialising
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--sub)' }}>Connecting to GitHub Models API…</div>
@@ -221,8 +222,8 @@ export default function ReasoningTab({ liveEvents, isProcessing }) {
         }
         return (
             <div className="proc-ph">
-                <div style={{ fontSize: 32, marginBottom: '.5rem', opacity: .3 }}>🧠</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--faint)' }}>
+                <div style={{ fontSize: 28, marginBottom: '.5rem', opacity: .2 }}>🧠</div>
+                <div style={{ fontSize: 11, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: 1 }}>
                     Click a risk card to start the agent
                 </div>
             </div>
@@ -235,7 +236,7 @@ export default function ReasoningTab({ liveEvents, isProcessing }) {
                 <LiveEvent key={i} event={ev} index={i} />
             ))}
             {isProcessing && (
-                <div className="typing-dots">
+                <div className="stream-pulse">
                     <span /><span /><span />
                 </div>
             )}

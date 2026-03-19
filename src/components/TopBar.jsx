@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 
-export default function TopBar() {
+const TABS = ['Dashboard', 'Claims', 'Reports', 'Settings'];
+
+export default function TopBar({ activeTab, onTabChange }) {
     const [time, setTime] = useState('');
 
     useEffect(() => {
@@ -16,8 +18,14 @@ export default function TopBar() {
                 Foresight <span className="logo-badge">LAYA</span>
             </div>
             <nav className="topbar-nav">
-                {['Dashboard', 'Claims', 'Reports', 'Settings'].map((n, i) => (
-                    <div key={n} className={`tn${i === 0 ? ' on' : ''}`}>{n}</div>
+                {TABS.map(n => (
+                    <div
+                        key={n}
+                        className={`tn${activeTab === n ? ' on' : ''}`}
+                        onClick={() => onTabChange(n)}
+                    >
+                        {n}
+                    </div>
                 ))}
             </nav>
             <div className="topbar-right">

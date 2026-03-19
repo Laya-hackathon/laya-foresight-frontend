@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
 
 import TopBar from './components/TopBar';
+import ClaimsTab from './components/ClaimsTab';
+import ReportsTab from './components/ReportsTab';
 import AgentBar from './components/AgentBar';
 import StatRow from './components/StatRow';
 import BarChart from './components/BarChart';
@@ -47,6 +49,7 @@ function Toast({ title, body }) {
 }
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('Dashboard');
   const [scenarios, setScenarios] = useState([]);
   const [cardStates, setCardStates] = useState(() => {
     try {
@@ -251,8 +254,10 @@ export default function App() {
 
   return (
     <>
-      <TopBar />
-      <div className="page-body">
+      <TopBar activeTab={activeTab} onTabChange={setActiveTab} />
+      {activeTab === 'Claims'   && <ClaimsTab />}
+      {activeTab === 'Reports'  && <ReportsTab />}
+      <div className="page-body" style={{ display: activeTab === 'Dashboard' ? 'flex' : 'none' }}>
         {/* ── Left sidebar ─────────────────────────── */}
         <aside className="left-sidebar">
           <div className="sidebar-section">
