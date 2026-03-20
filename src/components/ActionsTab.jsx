@@ -34,7 +34,7 @@ export default function ActionsTab({ scenario, liveEvents }) {
             {alertCall && (
                 <div className="ac-card">
                     <div className="ac-hdr">
-                        <div className="ac-title-txt">🔔 Employee Alert — Slack</div>
+                        <div className="ac-title-txt">🔔 Employee Alert</div>
                         <span className="ac-status" style={{
                             background: band === 'HIGH' ? 'var(--rose-lite)' : 'var(--amber-lite)',
                             color: band === 'HIGH' ? 'var(--rose)' : 'var(--amber)'
@@ -43,19 +43,12 @@ export default function ActionsTab({ scenario, liveEvents }) {
                         </span>
                     </div>
                     <div className="ac-body-p">
-                        <div className="slack-preview">
-                            <div style={{ marginBottom: '.4rem' }}>
-                                <span className="slack-bot">LayaAIAgent</span>
-                                <span className="slack-ts">just now</span>
-                            </div>
-                            {band === 'HIGH' ? '🚨' : '⚠️'} <strong>{alertCall.data.tool_input?.urgency || 'ELEVATED'}</strong> — {scenario?.claim_id}<br />
-                            {scenario?.customer_name} · {scenario?.claim_type} · €{fmt(scenario?.amount_eur || 0)}<br />
-                            {alertCall.data.tool_input?.message?.slice(0, 120)}…
-                            <div className="slack-btns">
-                                <div className="sb-btn sb-g">✓ Update</div>
-                                <div className="sb-btn sb-r">📞 Callback</div>
-                                <div className="sb-btn sb-gr">Dismiss</div>
-                            </div>
+                        <div className="log-mono">
+                            urgency: "{alertCall.data.tool_input?.urgency || 'ELEVATED'}"<br />
+                            claim_id: "{scenario?.claim_id}"<br />
+                            sla_minutes: {alertResult?.data?.result?.sla_minutes ?? '—'}<br />
+                            channel: "#claims-alerts"<br />
+                            message: "{alertCall.data.tool_input?.message?.slice(0, 140)}…"
                         </div>
                     </div>
                 </div>

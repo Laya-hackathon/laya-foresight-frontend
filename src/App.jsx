@@ -48,6 +48,36 @@ function Toast({ title, body }) {
   );
 }
 
+const URGENCY_COL  = { URGENT: 'var(--rose)',  ELEVATED: 'var(--amber)', WATCH: 'var(--laya)' };
+const URGENCY_LITE = { URGENT: 'var(--rose-lite)', ELEVATED: 'var(--amber-lite)', WATCH: 'var(--laya-glow)' };
+
+function AlertNotifStack({ notifs, onDismiss }) {
+  if (!notifs.length) return null;
+  return (
+    <div className="an-stack">
+      {notifs.map(n => {
+        const col  = URGENCY_COL[n.urgency]  || 'var(--laya)';
+        const lite = URGENCY_LITE[n.urgency] || 'var(--laya-glow)';
+        return (
+          <div key={n.id} className="an-card" style={{ borderLeft: `3px solid ${col}` }}>
+            <div className="an-top">
+              <span className="an-badge" style={{ background: lite, color: col }}>{n.urgency}</span>
+              <span className="an-claim">{n.claimId}</span>
+              <button className="an-close" onClick={() => onDismiss(n.id)}>×</button>
+            </div>
+            {n.customerName && <div className="an-name">{n.customerName}</div>}
+            <div className="an-msg">{n.message}</div>
+            <div className="an-footer">
+              <span>SLA {n.sla ?? '—'} min</span>
+              <span>#claims-alerts</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [scenarios, setScenarios] = useState([]);
@@ -61,6 +91,7 @@ export default function App() {
   const [activeId, setActiveId] = useState(null);
   const [timerSec, setTimerSec] = useState(0);
   const [toast, setToast] = useState(null);
+  const [alertNotifs, setAlertNotifs] = useState([]);
   const [feedItems, setFeedItems] = useState([]);
   const [agentStats, setAgentStats] = useState(null);
   const timerRef = useRef(null);
@@ -151,6 +182,40 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  const dismissAlert = useCallback((id) => {
+    setAlertNotifs(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const resumeScenario = useCallback((scenarioId, questionId) => {
+    if (sseRef.current[scenarioId]) sseRef.current[scenarioId].close();
+    setCardStates(prev => ({
+      ...prev,
+      [scenarioId]: { ...prev[scenarioId], state: 'proc', pausedQuestion: null },
+    }));
+    const es = new EventSource(`${BACKEND_URL}/api/resume/${scenarioId}?question_id=${questionId}`);
+    sseRef.current[scenarioId] = es;
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data.trim());
+        if (event.type === 'done') {
+          es.close();
+          delete sseRef.current[scenarioId];
+          setCardStates(prev => ({ ...prev, [scenarioId]: { ...prev[scenarioId], state: 'done', finishedAt: Date.now() } }));
+          return;
+        }
+        setCardStates(prev => ({
+          ...prev,
+          [scenarioId]: { ...prev[scenarioId], events: [...(prev[scenarioId]?.events || []), event] },
+        }));
+      } catch { }
+    };
+    es.onerror = () => {
+      es.close();
+      delete sseRef.current[scenarioId];
+      setCardStates(prev => ({ ...prev, [scenarioId]: { ...prev[scenarioId], state: 'done', finishedAt: Date.now() } }));
+    };
+  }, []);
+
   const runScenario = useCallback((scenarioId) => {
     if (sseRef.current[scenarioId]) sseRef.current[scenarioId].close();
 
@@ -175,6 +240,34 @@ export default function App() {
           }));
           showToast('Agent Complete', `${scenario?.customer_name || scenarioId} — resolved`);
           return;
+        }
+        // Pause card when agent asks for employee input
+        if (event.type === 'waiting_for_input') {
+          setCardStates(prev => ({
+            ...prev,
+            [scenarioId]: {
+              ...prev[scenarioId],
+              state: 'paused',
+              pausedQuestion: event.data,
+            },
+          }));
+        }
+        // Trigger alert popup when alert_employee fires
+        if (event.type === 'tool_result' && event.data?.tool_name === 'alert_employee') {
+          const scenario = scenarios.find(s => s.id === scenarioId);
+          const result = event.data.result || {};
+          const notif = {
+            id: Date.now() + Math.random(),
+            urgency: result.urgency || 'ELEVATED',
+            claimId: scenario?.claim_id || scenarioId,
+            customerName: scenario?.user?.first_name
+              ? `${scenario.user.first_name} ${scenario.user.last_name || ''}`.trim()
+              : '',
+            message: result.message_preview || '',
+            sla: result.sla_minutes,
+          };
+          setAlertNotifs(prev => [...prev, notif]);
+          setTimeout(() => setAlertNotifs(prev => prev.filter(n => n.id !== notif.id)), 8000);
         }
         setCardStates(prev => ({
           ...prev,
@@ -256,7 +349,7 @@ export default function App() {
     <>
       <TopBar activeTab={activeTab} onTabChange={setActiveTab} />
       {activeTab === 'Claims'   && <ClaimsTab />}
-      {activeTab === 'Reports'  && <ReportsTab />}
+      {activeTab === 'Reports'  && <ReportsTab onResumeScenario={resumeScenario} />}
       <div className="page-body" style={{ display: activeTab === 'Dashboard' ? 'flex' : 'none' }}>
         {/* ── Left sidebar ─────────────────────────── */}
         <aside className="left-sidebar">
@@ -328,6 +421,7 @@ export default function App() {
       />
 
       {toast && <Toast title={toast.title} body={toast.body} />}
+      <AlertNotifStack notifs={alertNotifs} onDismiss={dismissAlert} />
     </>
   );
 }
