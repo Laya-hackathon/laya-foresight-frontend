@@ -1,7 +1,9 @@
 import { bColor, normBand, fmt } from '../utils/helpers';
 import { renderMd } from '../utils/renderMd';
+import { useRenderLog } from '../utils/logger';
 
 export default function SummaryTab({ scenario, liveEvents, timerSec }) {
+    useRenderLog('SummaryTab');
     if (!liveEvents || liveEvents.length === 0) {
         return (
             <div className="proc-ph">

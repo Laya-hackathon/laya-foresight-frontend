@@ -1,4 +1,7 @@
+import { useRenderLog } from '../utils/logger';
+
 export default function FeedCard({ item }) {
+    useRenderLog('FeedCard');
     return (
         <div className="feed-item">
             <div className="fi-icon" style={{ background: item.bg }}>{item.icon}</div>

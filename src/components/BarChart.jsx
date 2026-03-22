@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../utils/helpers';
+import { useRenderLog, loggedFetch } from '../utils/logger';
 
 const DEFAULT_BINS = [
     { c: 0, col: '#4ade80' }, { c: 0, col: '#86efac' },
@@ -13,6 +14,7 @@ const XLABELS = ['0.0', '0.2', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0'];
 const CHART_H = 110;
 
 export default function BarChart() {
+    useRenderLog('BarChart');
     const [bins, setBins]         = useState(DEFAULT_BINS);
     const [total, setTotal]       = useState(0);
     const [hovered, setHovered]   = useState(null);
@@ -20,7 +22,7 @@ export default function BarChart() {
 
     useEffect(() => {
         const load = () => {
-            fetch(`${BACKEND_URL}/api/chart`)
+            loggedFetch(`${BACKEND_URL}/api/chart`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.bins?.length) {

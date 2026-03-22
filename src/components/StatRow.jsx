@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../utils/helpers';
+import { useRenderLog, loggedFetch } from '../utils/logger';
 
 export default function StatRow() {
+    useRenderLog('StatRow');
     const [stats, setStats] = useState(null);
 
     useEffect(() => {
         const load = () => {
-            fetch(`${BACKEND_URL}/api/stats`)
+            loggedFetch(`${BACKEND_URL}/api/stats`)
                 .then(r => r.json())
                 .then(setStats)
                 .catch(() => { });
@@ -35,7 +37,7 @@ export default function StatRow() {
         {
             label: 'High Risk Cases',
             value: String(stats.high_risk),
-            sub: 'Score ≥ 0.70 today',
+            sub: 'Score ≥ 0.70 all time',
             delta: `${stats.total_predictions} total predictions`,
             dc: 'ddown',
             color: 'var(--rose)',
@@ -44,7 +46,7 @@ export default function StatRow() {
         {
             label: 'Medium Risk Cases',
             value: String(stats.medium_risk),
-            sub: 'Score 0.40–0.69 today',
+            sub: 'Score 0.40–0.69 all time',
             delta: `${stats.low_risk} low risk`,
             dc: 'dflat',
             color: 'var(--amber)',
@@ -53,8 +55,8 @@ export default function StatRow() {
         {
             label: 'Calls Prevented',
             value: String(stats.calls_prevented),
-            sub: 'Interventions logged today',
-            delta: `${stats.total_predictions} scored today`,
+            sub: 'Interventions logged all time',
+            delta: `${stats.total_predictions} total scored`,
             dc: 'dup',
             color: 'var(--green)',
             cls: 'sc-green',
@@ -63,13 +65,13 @@ export default function StatRow() {
             label: 'Agent Actions',
             value: String(stats.total_actions),
             sub: `${stats.emails_sent} email · ${stats.push_sent} push · ${stats.slack_sent} Slack`,
-            delta: 'All tool calls today',
+            delta: 'All tool calls all time',
             dc: 'dup',
             color: 'var(--laya)',
             cls: 'sc-laya',
         },
         {
-            label: 'Outreach Today',
+            label: 'Total Outreach',
             value: String(stats.emails_sent + stats.push_sent),
             sub: `${stats.emails_sent} emails · ${stats.push_sent} push`,
             delta: `${stats.slack_sent} Slack alerts`,
@@ -81,7 +83,7 @@ export default function StatRow() {
 
     return (
         <div>
-            <div className="slbl">Today's Overview</div>
+            <div className="slbl">Overall Overview</div>
             <div className="stat-row">
                 {STATS.map(s => (
                     <div key={s.label} className={`stat-card ${s.cls}`}>

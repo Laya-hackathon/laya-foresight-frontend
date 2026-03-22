@@ -1,6 +1,8 @@
 import { bColor, normBand, stInfo, borderClass, fmt } from '../utils/helpers';
+import { useRenderLog } from '../utils/logger';
 
 export default function CallCard({ scenario, state, onOpen, isNew }) {
+    useRenderLog('CallCard');
     const band = normBand(scenario.risk_band || scenario.band);
     const score = scenario.risk_score ?? scenario.score ?? 0;
     const pct = Math.round(score * 100);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { renderInline, renderMd } from '../utils/renderMd';
+import { useRenderLog } from '../utils/logger';
 
 // ── Word-by-word token fade (like AI token streaming) ──────────────────────
 // Splits text into words, each word fades in with a staggered delay.
@@ -198,6 +199,7 @@ function LiveEvent({ event, index }) {
 
 // ── Main ReasoningTab ───────────────────────────────────────────────────────
 export default function ReasoningTab({ liveEvents, isProcessing }) {
+    useRenderLog('ReasoningTab');
     const bottomRef = useRef(null);
 
     useEffect(() => {

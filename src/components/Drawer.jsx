@@ -3,6 +3,7 @@ import { bColor, normBand, fmt } from '../utils/helpers';
 import ReasoningTab from './ReasoningTab';
 import SummaryTab from './SummaryTab';
 import ActionsTab from './ActionsTab';
+import { useRenderLog } from '../utils/logger';
 
 const TABS = [
     { id: 'reasoning', label: '🧠 Reasoning' },
@@ -11,6 +12,7 @@ const TABS = [
 ];
 
 export default function Drawer({ isOpen, scenario, liveEvents, isProcessing, timerSec, onClose }) {
+    useRenderLog('Drawer');
     const [tab, setTab] = useState('reasoning');
     const bodyRef = useRef(null);
 

@@ -1,6 +1,8 @@
 import { normBand, fmt } from '../utils/helpers';
+import { useRenderLog } from '../utils/logger';
 
 export default function ActionsTab({ scenario, liveEvents }) {
+    useRenderLog('ActionsTab');
     if (!liveEvents || liveEvents.length === 0) {
         return (
             <div className="proc-ph">

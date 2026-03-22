@@ -1,8 +1,11 @@
+import { useRenderLog } from '../utils/logger';
+
 export default function AgentBar({ activeCount, todayCount, preventedCount, successRate }) {
+    useRenderLog('AgentBar');
     const isActive = activeCount > 0;
     const stats = [
         { val: activeCount, lbl: 'Active Cases', color: 'var(--laya)' },
-        { val: todayCount, lbl: 'Processed Today', color: 'var(--violet)' },
+        { val: todayCount, lbl: 'Processed', color: 'var(--violet)' },
         { val: preventedCount, lbl: 'Prevented', color: 'var(--green)' },
         { val: `${successRate}%`, lbl: 'Success Rate', color: 'var(--amber)' },
     ];

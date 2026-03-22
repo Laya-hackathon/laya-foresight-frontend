@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { BACKEND_URL, fmt } from '../utils/helpers';
+import { useRenderLog } from '../utils/logger';
 
 /* ── helpers ── */
 const riskColor = b =>
@@ -308,6 +309,7 @@ function ClaimDetail({ claim }) {
 
 /* ── Main ── */
 export default function ClaimsTab() {
+  useRenderLog('ClaimsTab');
   const [claims, setClaims]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');

@@ -10,7 +10,9 @@ import BarChart from './components/BarChart';
 import FeedCard from './components/FeedCard';
 import CallCard from './components/CallCard';
 import Drawer from './components/Drawer';
+import PerfPanel from './components/PerfPanel';
 import { BACKEND_URL } from './utils/helpers';
+import { useRenderLog, loggedFetch, logSSEEvent, logState } from './utils/logger';
 
 const TYPE_META = {
   email:        { icon: '📧', bg: '#eff6ff', badge: 'EMAIL', bc: '#eff6ff', btc: '#1d4ed8' },
@@ -79,6 +81,7 @@ function AlertNotifStack({ notifs, onDismiss }) {
 }
 
 export default function App() {
+  useRenderLog('App');
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [scenarios, setScenarios] = useState([]);
   const [cardStates, setCardStates] = useState(() => {
@@ -99,10 +102,11 @@ export default function App() {
 
   // Load scenarios (poll every 5s for new ML predictions)
   const loadScenarios = useCallback(() => {
-    fetch(`${BACKEND_URL}/api/scenarios`)
+    loggedFetch(`${BACKEND_URL}/api/scenarios`)
       .then(r => r.json())
       .then(data => {
         const list = data.scenarios || [];
+        logState('App', 'scenarios');
         setScenarios(list);
         const activeIds = new Set(list.map(s => s.id));
 
@@ -143,10 +147,10 @@ export default function App() {
   // Load feed (poll every 15s)
   useEffect(() => {
     const load = () => {
-      fetch(`${BACKEND_URL}/api/feed`)
+      loggedFetch(`${BACKEND_URL}/api/feed`)
         .then(r => r.json())
         .then(data => {
-          if (data.feed) setFeedItems(data.feed.map(dbRowToFeed));
+          if (data.feed) { logState('App', 'feedItems'); setFeedItems(data.feed.map(dbRowToFeed)); }
         })
         .catch(() => { });
     };
@@ -158,9 +162,9 @@ export default function App() {
   // Load stats for AgentBar (poll every 15s)
   useEffect(() => {
     const load = () => {
-      fetch(`${BACKEND_URL}/api/stats`)
+      loggedFetch(`${BACKEND_URL}/api/stats`)
         .then(r => r.json())
-        .then(setAgentStats)
+        .then(d => { logState('App', 'agentStats'); setAgentStats(d); })
         .catch(() => { });
     };
     load();
@@ -197,12 +201,15 @@ export default function App() {
     es.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data.trim());
+        logSSEEvent(scenarioId, event.type, e.data.length);
         if (event.type === 'done') {
           es.close();
           delete sseRef.current[scenarioId];
+          logState('App', 'cardStates[resume:done]');
           setCardStates(prev => ({ ...prev, [scenarioId]: { ...prev[scenarioId], state: 'done', finishedAt: Date.now() } }));
           return;
         }
+        logState('App', 'cardStates[resume:event]');
         setCardStates(prev => ({
           ...prev,
           [scenarioId]: { ...prev[scenarioId], events: [...(prev[scenarioId]?.events || []), event] },
@@ -230,10 +237,12 @@ export default function App() {
     es.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data.trim());
+        logSSEEvent(scenarioId, event.type, e.data.length);
         if (event.type === 'done') {
           es.close();
           delete sseRef.current[scenarioId];
           const scenario = scenarios.find(s => s.id === scenarioId);
+          logState('App', 'cardStates[run:done]');
           setCardStates(prev => ({
             ...prev,
             [scenarioId]: { ...prev[scenarioId], state: 'done', finishedAt: Date.now() },
@@ -243,6 +252,7 @@ export default function App() {
         }
         // Pause card when agent asks for employee input
         if (event.type === 'waiting_for_input') {
+          logState('App', 'cardStates[run:paused]');
           setCardStates(prev => ({
             ...prev,
             [scenarioId]: {
@@ -266,9 +276,11 @@ export default function App() {
             message: result.message_preview || '',
             sla: result.sla_minutes,
           };
+          logState('App', 'alertNotifs');
           setAlertNotifs(prev => [...prev, notif]);
           setTimeout(() => setAlertNotifs(prev => prev.filter(n => n.id !== notif.id)), 8000);
         }
+        logState('App', 'cardStates[run:event]');
         setCardStates(prev => ({
           ...prev,
           [scenarioId]: {
@@ -297,10 +309,11 @@ export default function App() {
     if (!cs || cs.state === 'incoming') {
       runScenario(scenarioId);
     } else if (cs.state === 'done' && (!cs.events || cs.events.length === 0)) {
-      fetch(`${BACKEND_URL}/api/history/${scenarioId}`)
+      loggedFetch(`${BACKEND_URL}/api/history/${scenarioId}`)
         .then(r => r.json())
         .then(data => {
           if (data.events?.length > 0) {
+            logState('App', 'cardStates[history]');
             setCardStates(prev => ({
               ...prev,
               [scenarioId]: { ...prev[scenarioId], events: data.events },
@@ -422,6 +435,7 @@ export default function App() {
 
       {toast && <Toast title={toast.title} body={toast.body} />}
       <AlertNotifStack notifs={alertNotifs} onDismiss={dismissAlert} />
+      <PerfPanel />
     </>
   );
 }

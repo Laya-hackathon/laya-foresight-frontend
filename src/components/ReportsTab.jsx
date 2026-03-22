@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { BACKEND_URL, fmt } from '../utils/helpers';
 import { renderMd } from '../utils/renderMd';
 import { renderInline } from '../utils/renderMd';
+import { useRenderLog } from '../utils/logger';
 
 /* ── helpers ── */
 const fmtDt  = ts => ts ? new Date(ts).toLocaleDateString('en-IE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
@@ -279,6 +280,7 @@ function AlertRow({ alert, active, onSelect }) {
 
 /* ── Main ── */
 export default function ReportsTab({ onResumeScenario }) {
+  useRenderLog('ReportsTab');
   const [reports, setReports]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState(null);
