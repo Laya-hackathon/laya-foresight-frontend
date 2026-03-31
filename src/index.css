@@ -710,12 +710,48 @@ body {
   color: var(--rose);
   border: 1px solid rgba(225, 29, 72, .25);
   border-radius: 10px;
-  margin-left: auto;
 }
+
+.sim-btn {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .5px;
+  padding: 2px 9px;
+  background: var(--laya);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.sim-btn:hover { opacity: .85; }
+.sim-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.sim-btn-hero {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  padding: 14px 32px;
+  background: var(--laya);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 61, 122, .35);
+  transition: transform .15s, box-shadow .15s, opacity .15s;
+}
+.sim-btn-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0, 61, 122, .45);
+}
+.sim-btn-hero:active { transform: translateY(0); }
+.sim-btn-hero:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 .no-calls {
   text-align: center;
-  padding: 1.5rem .75rem;
+  padding: 2.5rem 1rem;
   color: var(--faint);
   font-size: 12px;
   background: var(--surface);

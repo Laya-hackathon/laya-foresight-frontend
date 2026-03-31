@@ -7,7 +7,7 @@ import { useRenderLog } from '../utils/logger';
 /* ── helpers ── */
 const fmtDt  = ts => ts ? new Date(ts).toLocaleDateString('en-IE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
 const fmtDur = s  => s == null ? '—' : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
-const memberName = r => r.first_name && r.last_name ? `${r.first_name} ${r.last_name}` : r.member_id;
+const memberName = r => r.full_name || r.member_id;
 const stripHtml  = h => h ? h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '';
 
 const RISK_COLOR    = b => b === 'HIGH' ? 'var(--rose)' : b === 'MEDIUM' ? 'var(--amber)' : b === 'LOW' ? 'var(--green)' : 'var(--faint)';
@@ -210,7 +210,7 @@ function ReportDetail({ report, detail, loading }) {
 function PendingQuestion({ question, onRespond }) {
   const [text, setText]       = useState('');
   const [sending, setSending] = useState(false);
-  const name = question.first_name ? `${question.first_name} ${question.last_name || ''}`.trim() : question.claim_id;
+  const name = question.full_name || question.claim_id;
 
   const submit = async () => {
     if (!text.trim()) return;
@@ -259,7 +259,7 @@ function PendingQuestion({ question, onRespond }) {
 function AlertRow({ alert, active, onSelect }) {
   const col  = URGENCY_COL(alert.urgency);
   const lite = URGENCY_LITE(alert.urgency);
-  const name = alert.first_name ? `${alert.first_name} ${alert.last_name || ''}`.trim() : alert.claim_id;
+  const name = alert.full_name || alert.claim_id;
   return (
     <div
       className={`alrt-row${active ? ' alrt-row-active' : ''}`}
@@ -351,7 +351,7 @@ export default function ReportsTab({ onResumeScenario }) {
     if (search) {
       const q = search.toLowerCase();
       return r.claim_id?.toLowerCase().includes(q) || r.member_id?.toLowerCase().includes(q)
-        || r.first_name?.toLowerCase().includes(q) || r.last_name?.toLowerCase().includes(q)
+        || r.full_name?.toLowerCase().includes(q)
         || r.treatment_type?.toLowerCase().includes(q);
     }
     return true;

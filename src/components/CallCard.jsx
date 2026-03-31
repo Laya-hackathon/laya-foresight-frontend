@@ -10,6 +10,7 @@ export default function CallCard({ scenario, state, onOpen, isNew }) {
     const si = stInfo(state);
     const bc = borderClass(band, state);
 
+
     return (
         <div
             className={`call-card ${bc}${isNew ? ' new' : ''}`}
@@ -17,14 +18,14 @@ export default function CallCard({ scenario, state, onOpen, isNew }) {
         >
             <div className="cc-top">
                 <div>
-                    <div className="cc-name">{scenario.user.first_name} {scenario.user.last_name}</div>
+                    <div className="cc-name">{scenario.user.full_name}</div>
                     <div className="cc-claim-id">{scenario.claim_id || scenario.id} · {scenario.claim.treatment_type || scenario.type}</div>
                 </div>
                 <span className={`band b-${band}`}>{band}</span>
             </div>
 
             <div className="cc-tags">
-                <span className="cc-tag">€{fmt(scenario.claim_amount || scenario.amount || 0)}</span>
+                <span className="cc-tag">€{fmt(scenario.claim.claim_amount || scenario.amount || 0)}</span>
                 <span className="cc-tag">{scenario.claim.treatment_type || scenario.type}</span>
                 {scenario.description && (
                     <span className="cc-warn" title={scenario.description}>⚠ High Risk</span>

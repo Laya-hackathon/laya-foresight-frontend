@@ -4,6 +4,7 @@ import './index.css';
 import TopBar from './components/TopBar';
 import ClaimsTab from './components/ClaimsTab';
 import ReportsTab from './components/ReportsTab';
+import SettingsTab from './components/SettingsTab';
 import AgentBar from './components/AgentBar';
 import StatRow from './components/StatRow';
 import BarChart from './components/BarChart';
@@ -97,6 +98,8 @@ export default function App() {
   const [alertNotifs, setAlertNotifs] = useState([]);
   const [feedItems, setFeedItems] = useState([]);
   const [agentStats, setAgentStats] = useState(null);
+  const [simulating, setSimulating] = useState(false);
+  const [simLog, setSimLog] = useState([]);
   const timerRef = useRef(null);
   const sseRef = useRef({});
 
@@ -164,7 +167,7 @@ export default function App() {
     const load = () => {
       loggedFetch(`${BACKEND_URL}/api/stats`)
         .then(r => r.json())
-        .then(d => { logState('App', 'agentStats'); setAgentStats(d); })
+        .then(d => { logState('App', 'agentStats'); setAgentStats(d); console.log('Stats', d); })
         .catch(() => { });
     };
     load();
@@ -185,6 +188,65 @@ export default function App() {
     setToast({ title, body });
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  const handleSimulate = useCallback(() => {
+    setSimulating(true);
+    setSimLog([]);
+    const es = new EventSource(`${BACKEND_URL}/api/simulate`);
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data.trim());
+        if (event.type === 'step') {
+          const { script, status } = event.data;
+          setSimLog(prev => {
+            const updated = [...prev];
+            const idx = updated.findIndex(l => l.script === script);
+            if (idx >= 0) updated[idx] = { script, status };
+            else updated.push({ script, status });
+            return updated;
+          });
+        } else if (event.type === 'log') {
+          // ignore verbose log lines
+        } else if (event.type === 'error') {
+          es.close();
+          setSimulating(false);
+          showToast('Simulate Error', event.data?.message || 'Pipeline failed');
+        } else if (event.type === 'done') {
+          es.close();
+          setSimulating(false);
+          setSimLog([]);
+          const list = event.data?.scenarios || [];
+          setScenarios(list);
+          const activeIds = new Set(list.map(s => s.id));
+          setCardStates(prev => {
+            const cleaned = {};
+            Object.entries(prev).forEach(([id, cs]) => {
+              if (activeIds.has(id)) cleaned[id] = cs;
+            });
+            return cleaned;
+          });
+          list.forEach((s, i) => {
+            setCardStates(prev => {
+              if (prev[s.id]) return prev;
+              return { ...prev, [s.id]: { state: 'incoming', events: [], startedAt: null, finishedAt: null, isNew: true } };
+            });
+            setTimeout(() => {
+              setCardStates(prev => {
+                if (!prev[s.id]) return prev;
+                return { ...prev, [s.id]: { ...prev[s.id], isNew: false } };
+              });
+            }, 800 + i * 500);
+          });
+          showToast('Simulate', `${list.length} scenario(s) loaded`);
+        }
+      } catch { }
+    };
+    es.onerror = () => {
+      es.close();
+      setSimulating(false);
+      showToast('Simulate', 'Connection error during pipeline');
+    };
+  }, [showToast]);
 
   const dismissAlert = useCallback((id) => {
     setAlertNotifs(prev => prev.filter(n => n.id !== id));
@@ -345,12 +407,12 @@ export default function App() {
   }, [drawerOpen, activeId, cardStates]);
 
   const cardList = Object.values(cardStates);
-  const activeCount = cardList.filter(c => c.state === 'proc').length;
+  const activeCount = cardList.filter(c => c.state !== 'done').length;
   const activeCardCS = activeId ? cardStates[activeId] : null;
   const activeScenario = scenarios.find(s => s.id === activeId);
   const visibleScenarios = scenarios.filter(s => cardStates[s.id]);
 
-  const todayCount = agentStats?.total_predictions ?? scenarios.length;
+  const todayCount = agentStats?.total_runs ?? 0;
   const preventedCount = agentStats?.calls_prevented ?? 0;
   const successRate = agentStats && agentStats.total_predictions > 0
     ? Math.round((agentStats.calls_prevented / agentStats.total_predictions) * 100)
@@ -361,8 +423,9 @@ export default function App() {
   return (
     <>
       <TopBar activeTab={activeTab} onTabChange={setActiveTab} />
-      {activeTab === 'Claims'   && <ClaimsTab />}
-      {activeTab === 'Reports'  && <ReportsTab onResumeScenario={resumeScenario} />}
+      {activeTab === 'Claims'    && <ClaimsTab />}
+      {activeTab === 'Reports'   && <ReportsTab onResumeScenario={resumeScenario} />}
+      {activeTab === 'Settings'  && <SettingsTab />}
       <div className="page-body" style={{ display: activeTab === 'Dashboard' ? 'flex' : 'none' }}>
         {/* ── Left sidebar ─────────────────────────── */}
         <aside className="left-sidebar">
@@ -370,14 +433,26 @@ export default function App() {
             <div className="incoming-hdr">
               <div className="in-pulse" />
               <div className="in-title">Risk Triggers</div>
+              {visibleScenarios.length > 0 && (
+                <button className="sim-btn" onClick={handleSimulate} disabled={simulating}>
+                  {simulating ? `Running… ${simLog.filter(l => l.status === 'done').length}/3` : '▶ Simulate'}
+                </button>
+              )}
               <div className="in-cnt">
                 {cardList.filter(c => c.state !== 'done').length} active
               </div>
             </div>
             {visibleScenarios.length === 0 ? (
               <div className="no-calls">
-                <div style={{ fontSize: 24, marginBottom: '.4rem', opacity: .3 }}>🛡️</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--faint)' }}>No triggers yet</div>
+                <div style={{ fontSize: 32, marginBottom: '1rem', opacity: .25 }}>🛡️</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--faint)', marginBottom: '1.25rem' }}>No triggers yet</div>
+                <button className="sim-btn-hero" onClick={handleSimulate} disabled={simulating}>
+                  {simulating
+                    ? simLog.length > 0
+                      ? `${simLog[simLog.length - 1].script.replace('.py', '')} (${simLog.filter(l => l.status === 'done').length}/3)`
+                      : 'Starting…'
+                    : '▶  Run Simulation'}
+                </button>
               </div>
             ) : (
               <div className="calls-list">

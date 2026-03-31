@@ -7,8 +7,7 @@ const riskColor = b =>
   b === 'HIGH' ? 'var(--rose)' : b === 'MEDIUM' ? 'var(--amber)' : b === 'LOW' ? 'var(--green)' : 'var(--faint)';
 const fmtDate = ts =>
   ts ? new Date(ts).toLocaleDateString('en-IE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-const memberName = c =>
-  c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.user_id;
+const memberName = c => c.full_name || c.user_id;
 const daysSince = ts =>
   ts ? Math.floor((Date.now() - new Date(ts)) / 86400000) : null;
 const deriveStatus = c => {
@@ -334,8 +333,7 @@ export default function ClaimsTab() {
       return (
         c.claim_id?.toLowerCase().includes(q) ||
         c.user_id?.toLowerCase().includes(q)  ||
-        c.first_name?.toLowerCase().includes(q) ||
-        c.last_name?.toLowerCase().includes(q)  ||
+        c.full_name?.toLowerCase().includes(q) ||
         c.treatment_type?.toLowerCase().includes(q)
       );
     }

@@ -8,9 +8,10 @@ export function bColor(band) {
 
 export function normBand(band) {
     if (!band) return 'LOW';
-    if (band === 'CRITICAL') return 'HIGH';
-    if (band === 'MEDIUM') return 'MED';
-    return band;
+    const b = band.toUpperCase();
+    if (b === 'CRITICAL') return 'HIGH';
+    if (b === 'MEDIUM') return 'MED';
+    return b;
 }
 
 export function stInfo(s) {
